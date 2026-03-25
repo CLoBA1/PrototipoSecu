@@ -129,14 +129,25 @@
             // Se ejecuta internamente mientas busca, no hacemos nada.
         }
 
+        // Variables de control
+        let isBiometricPending = false;
+
         // PASO 2: API Biométrica (WebAuthn / Lector Intregrado)
         async function authenticateBiometric() {
+            // Prevenir doble ejecución que causa el error "A request is already pending"
+            if (isBiometricPending) return;
+            isBiometricPending = true;
+            
+            const btn = document.getElementById('btnBiometric');
+            btn.disabled = true;
+            btn.innerText = '⏳ Procesando huella...';
+            btn.style.opacity = '0.6';
+
             document.getElementById('status').innerText = 'Llamando al sensor de huella/FaceID...';
             document.getElementById('status').className = 'status';
 
             try {
                 // Esta es la llamada real a la API WebAuthn del navegador.
-                // En Producción (tu proyecto final), estas opciones vienen de tu base de datos.
                 const publicKey = {
                     challenge: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), 
                     rp: { name: "Prototipo Escolar" },
@@ -147,7 +158,6 @@
                     },
                     pubKeyCredParams: [{type: "public-key", alg: -7}],
                     authenticatorSelection: {
-                        // "platform" obliga al navegador a usar el hardware biomédico del equipo local (huella del cel, windows hello, etc)
                         authenticatorAttachment: "platform", 
                         userVerification: "required"
                     },
@@ -162,7 +172,7 @@
                 if(credential) {
                     document.getElementById('status').innerText = '✅ ¡Asistencia de ENTRADA registrada con éxito!';
                     document.getElementById('status').className = 'status success';
-                    document.getElementById('btnBiometric').style.display = 'none';
+                    btn.style.display = 'none';
                     
                     document.getElementById('log').innerText += "\n[Server] Guardando registro en BD: 07:58 AM";
                     
@@ -172,14 +182,30 @@
                         document.getElementById('btnScan').innerText = 'Probar de nuevo';
                         document.getElementById('status').innerText = '';
                         document.getElementById('log').innerText = '';
+                        isBiometricPending = false;
+                        btn.disabled = false;
+                        btn.innerText = '👆 2. Confirmar Identidad (Huella)';
+                        btn.style.opacity = '1';
                     }, 5000);
                 }
 
             } catch (error) {
                 console.error(error);
-                document.getElementById('status').innerText = '✖️ Cancelación biométrica o dispositivo sin lector.';
+                
+                // Mostrar botón de recarga si se buguea el lector del celular
+                let extraHtml = '';
+                if(error.message.includes('pending') || error.name === 'NotAllowedError') {
+                    extraHtml = '<br><br><button onclick="location.reload()" style="background:#d32f2f; padding:10px; font-size:1rem;">🔄 Recargar Página</button>';
+                }
+                
+                document.getElementById('status').innerHTML = '✖️ Cancelación biométrica o error.<br><span style="font-size: 0.9em; font-weight: normal;">' + error.message + '</span>' + extraHtml;
                 document.getElementById('status').className = 'status error';
-                document.getElementById('log').innerText = error.message;
+                
+                // Reactivar el botón por si quieren reintentar sin recargar
+                isBiometricPending = false;
+                btn.disabled = false;
+                btn.innerText = '👆 2. Confirmar Identidad (Huella)';
+                btn.style.opacity = '1';
             }
         }
     </script>
