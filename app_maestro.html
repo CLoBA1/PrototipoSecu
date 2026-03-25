@@ -133,28 +133,34 @@
         let isBiometricPending = false;
 
         // PASO 2: API Biométrica (WebAuthn / Lector Intregrado)
+        // PASO 2: API Biométrica (WebAuthn / Lector Intregrado)
         async function authenticateBiometric() {
             if (isBiometricPending) return;
             isBiometricPending = true;
             
             const btn = document.getElementById('btnBiometric');
             btn.disabled = true;
-            btn.innerText = '⏳ Esperando al sistema...';
+            btn.innerText = '⏳ Verificando hardware...';
             btn.style.opacity = '0.6';
 
-            document.getElementById('status').innerText = 'Llamando al sensor...';
+            document.getElementById('status').innerText = 'Revisando compatibilidad del celular...';
             document.getElementById('status').className = 'status';
 
             try {
-                // Verificar soporte
                 if (!window.PublicKeyCredential) {
-                    throw new Error("Tu navegador no soporta tecnología biométrica (WebAuthn).");
+                    throw new Error("El navegador no soporta biometría.");
                 }
 
-                // Generar un ID aleatorio para forzar a que sea siempre "nueva"
-                const randomUserId = new Uint8Array(16);
-                window.crypto.getRandomValues(randomUserId);
+                // Verificar si el celular realmente tiene la huella activa y disponible para Chrome
+                const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                
+                if (!isAvailable) {
+                    throw new Error("El celular no tiene huella/PIN configurado, o Chrome tiene bloqueado el acceso al sensor.");
+                }
 
+                btn.innerText = '⏳ Esperando huella...';
+                document.getElementById('status').innerText = 'Llamando al sensor...';
+                
                 const publicKey = {
                     challenge: window.crypto.getRandomValues(new Uint8Array(32)), 
                     rp: { 
@@ -167,60 +173,66 @@
                         displayName: "Profesor Principal"
                     },
                     pubKeyCredParams: [
-                        {type: "public-key", alg: -7}, // ES256
-                        {type: "public-key", alg: -257} // RS256
+                        {type: "public-key", alg: -7},
+                        {type: "public-key", alg: -257}
                     ],
                     authenticatorSelection: {
-                        authenticatorAttachment: "platform", // Fuerza a usar el dispositivo actual (salta el menú)
-                        requireResidentKey: false,
-                        userVerification: "required" // Fuerza pedir la huella/PIN
+                        authenticatorAttachment: "platform", 
+                        userVerification: "discouraged" // Evita que Chrome exija medidas extremas
                     },
                     timeout: 60000,
                     attestation: "none"
                 };
 
-                console.log("Invocando navigator.credentials.create...");
-                // Esto levantará la ventanita nativa del sistema operativo pidiendo la huella
                 const credential = await navigator.credentials.create({ publicKey });
                 
                 if(credential) {
-                    document.getElementById('status').innerText = '✅ ¡Asistencia de ENTRADA registrada con éxito!';
-                    document.getElementById('status').className = 'status success';
-                    btn.style.display = 'none';
-                    
-                    document.getElementById('log').innerText += "\n[Server] Guardando registro en BD: 07:58 AM";
-                    
-                    // Reiniciar
-                    setTimeout(() => {
-                        document.getElementById('btnScan').style.display = 'block';
-                        document.getElementById('btnScan').innerText = 'Probar de nuevo';
-                        document.getElementById('status').innerText = '';
-                        document.getElementById('log').innerText = '';
-                        isBiometricPending = false;
-                        btn.disabled = false;
-                        btn.innerText = '👆 2. Confirmar Identidad';
-                        btn.style.opacity = '1';
-                    }, 5000);
+                    marcarAsistenciaExitosa();
                 }
 
             } catch (error) {
                 console.error(error);
                 
-                // Mostrar botón de recarga si se buguea el lector del celular
-                let extraHtml = '';
-                if(error.message.includes('pending') || error.name === 'NotAllowedError') {
-                    extraHtml = '<br><br><button onclick="location.reload()" style="background:#d32f2f; padding:10px; font-size:1rem;">🔄 Recargar Página</button>';
-                }
-                
-                document.getElementById('status').innerHTML = '✖️ Cancelación biométrica o error.<br><span style="font-size: 0.9em; font-weight: normal;">' + error.message + '</span>' + extraHtml;
+                // Mostrar botón de recarga o simulación
+                document.getElementById('status').innerHTML = `
+                    ✖️ Error en el sensor: <br>
+                    <span style="font-size: 0.85em; font-weight: normal;">${error.message}</span>
+                    <br><br>
+                    <div style="font-size: 0.9em; font-weight: normal; color: #ccc;">
+                        *Nota: Algunos celulares bloquean webauthn por defecto. Para continuar explorando el prototipo, presiona simular:*
+                    </div>
+                    <button id="btnSimular" onclick="marcarAsistenciaExitosa()" style="background:#ff9800; padding:10px; font-size:1rem; margin-top:10px;">👉 Simular Huella Exitosa</button>
+                    <button onclick="location.reload()" style="background:#d32f2f; padding:10px; font-size:1rem; margin-top:5px;">🔄 Recargar Página</button>
+                `;
                 document.getElementById('status').className = 'status error';
                 
-                // Reactivar el botón por si quieren reintentar sin recargar
                 isBiometricPending = false;
-                btn.disabled = false;
-                btn.innerText = '👆 2. Confirmar Identidad (Huella)';
-                btn.style.opacity = '1';
+                btn.style.display = 'none'; // Lo ocultamos para que usen Simular
             }
+        }
+
+        function marcarAsistenciaExitosa() {
+            // Ocultar el botón de simulación si existe
+            const btnSimular = document.getElementById('btnSimular');
+            if(btnSimular) btnSimular.style.display = 'none';
+
+            document.getElementById('status').innerText = '✅ ¡Asistencia de ENTRADA registrada con éxito!';
+            document.getElementById('status').className = 'status success';
+            document.getElementById('btnBiometric').style.display = 'none';
+            document.getElementById('log').innerText += "\n[Server] Guardando registro en BD: 07:58 AM";
+            
+            // Reiniciar
+            setTimeout(() => {
+                document.getElementById('btnScan').style.display = 'block';
+                document.getElementById('btnScan').innerText = 'Probar de nuevo';
+                document.getElementById('status').innerText = '';
+                document.getElementById('log').innerText = '';
+                isBiometricPending = false;
+                const btn = document.getElementById('btnBiometric');
+                btn.disabled = false;
+                btn.innerText = '👆 2. Confirmar Identidad';
+                btn.style.opacity = '1';
+            }, 6000);
         }
     </script>
 </body>
