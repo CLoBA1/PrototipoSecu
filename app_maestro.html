@@ -134,35 +134,48 @@
 
         // PASO 2: API Biométrica (WebAuthn / Lector Intregrado)
         async function authenticateBiometric() {
-            // Prevenir doble ejecución que causa el error "A request is already pending"
             if (isBiometricPending) return;
             isBiometricPending = true;
             
             const btn = document.getElementById('btnBiometric');
             btn.disabled = true;
-            btn.innerText = '⏳ Procesando huella...';
+            btn.innerText = '⏳ Esperando al sistema...';
             btn.style.opacity = '0.6';
 
-            document.getElementById('status').innerText = 'Llamando al sensor de huella/FaceID...';
+            document.getElementById('status').innerText = 'Llamando al sensor...';
             document.getElementById('status').className = 'status';
 
             try {
-                // Esta es la llamada real a la API WebAuthn del navegador.
+                // Verificar soporte
+                if (!window.PublicKeyCredential) {
+                    throw new Error("Tu navegador no soporta tecnología biométrica (WebAuthn).");
+                }
+
+                // Generar un ID aleatorio para forzar a que sea siempre "nueva"
+                const randomUserId = new Uint8Array(16);
+                window.crypto.getRandomValues(randomUserId);
+
                 const publicKey = {
-                    challenge: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), 
-                    rp: { name: "Prototipo Escolar" },
-                    user: {
-                        id: new Uint8Array([12, 34]), 
-                        name: "maestro@tecnica6.edu.mx",
-                        displayName: "Prof. Alberto"
+                    challenge: new Uint8Array([11, 22, 33, 44, 55, 66, 77, 88]), 
+                    rp: { 
+                        name: "Prototipo Escolar",
+                        id: window.location.hostname // Forzar el dominio actual
                     },
-                    pubKeyCredParams: [{type: "public-key", alg: -7}],
+                    user: {
+                        id: randomUserId, 
+                        name: "maestro@escuela.com",
+                        displayName: "Profesor Prueba"
+                    },
+                    pubKeyCredParams: [
+                        {type: "public-key", alg: -7}, // ES256
+                        {type: "public-key", alg: -257} // RS256
+                    ],
                     authenticatorSelection: {
-                        authenticatorAttachment: "platform", 
-                        userVerification: "required"
+                        // Quitamos 'platform' estricto para que Android decida la mejor opción (huella, pin, cara)
+                        userVerification: "preferred" 
                     },
                     timeout: 60000,
-                    attestation: "direct"
+                    attestation: "none" // "none" evita que algunos navegadores bloqueen la petición por privacidad
                 };
 
                 console.log("Invocando navigator.credentials.create...");
@@ -176,7 +189,7 @@
                     
                     document.getElementById('log').innerText += "\n[Server] Guardando registro en BD: 07:58 AM";
                     
-                    // Reiniciar para probar de nuevo
+                    // Reiniciar
                     setTimeout(() => {
                         document.getElementById('btnScan').style.display = 'block';
                         document.getElementById('btnScan').innerText = 'Probar de nuevo';
@@ -184,7 +197,7 @@
                         document.getElementById('log').innerText = '';
                         isBiometricPending = false;
                         btn.disabled = false;
-                        btn.innerText = '👆 2. Confirmar Identidad (Huella)';
+                        btn.innerText = '👆 2. Confirmar Identidad';
                         btn.style.opacity = '1';
                     }, 5000);
                 }
