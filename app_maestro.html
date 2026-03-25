@@ -161,14 +161,17 @@
                 btn.innerText = '⏳ Esperando huella...';
                 document.getElementById('status').innerText = 'Llamando al sensor...';
                 
+                const challengeArray = window.crypto.getRandomValues(new Uint8Array(32));
+                const userArray = window.crypto.getRandomValues(new Uint8Array(16));
+
                 const publicKey = {
-                    challenge: window.crypto.getRandomValues(new Uint8Array(32)), 
+                    challenge: challengeArray.buffer, 
                     rp: { 
                         name: "Prototipo Escolar",
                         id: window.location.hostname
                     },
                     user: {
-                        id: window.crypto.getRandomValues(new Uint8Array(16)), 
+                        id: userArray.buffer, 
                         name: "maestro@escuela.com",
                         displayName: "Profesor Principal"
                     },
@@ -178,7 +181,7 @@
                     ],
                     authenticatorSelection: {
                         authenticatorAttachment: "platform", 
-                        userVerification: "discouraged" // Evita que Chrome exija medidas extremas
+                        userVerification: "discouraged"
                     },
                     timeout: 60000,
                     attestation: "none"
