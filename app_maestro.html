@@ -156,26 +156,27 @@
                 window.crypto.getRandomValues(randomUserId);
 
                 const publicKey = {
-                    challenge: new Uint8Array([11, 22, 33, 44, 55, 66, 77, 88]), 
+                    challenge: window.crypto.getRandomValues(new Uint8Array(32)), 
                     rp: { 
                         name: "Prototipo Escolar",
-                        id: window.location.hostname // Forzar el dominio actual
+                        id: window.location.hostname
                     },
                     user: {
-                        id: randomUserId, 
+                        id: window.crypto.getRandomValues(new Uint8Array(16)), 
                         name: "maestro@escuela.com",
-                        displayName: "Profesor Prueba"
+                        displayName: "Profesor Principal"
                     },
                     pubKeyCredParams: [
                         {type: "public-key", alg: -7}, // ES256
                         {type: "public-key", alg: -257} // RS256
                     ],
                     authenticatorSelection: {
-                        // Quitamos 'platform' estricto para que Android decida la mejor opción (huella, pin, cara)
-                        userVerification: "preferred" 
+                        authenticatorAttachment: "platform", // Fuerza a usar el dispositivo actual (salta el menú)
+                        requireResidentKey: false,
+                        userVerification: "required" // Fuerza pedir la huella/PIN
                     },
                     timeout: 60000,
-                    attestation: "none" // "none" evita que algunos navegadores bloqueen la petición por privacidad
+                    attestation: "none"
                 };
 
                 console.log("Invocando navigator.credentials.create...");
