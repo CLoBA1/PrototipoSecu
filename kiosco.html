@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiosco de Asistencia</title>
+    <!-- Librería para generar códigos QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f0f2f5; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+        .card { 
+            background: white; 
+            padding: 2.5rem; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08); 
+            text-align: center; 
+        }
+        h1 { color: #1a237e; margin-bottom: 5px; }
+        p { color: #555; font-size: 1.1em; }
+        #qrcode { 
+            margin: 30px auto; 
+            display: flex; 
+            justify-content: center; 
+            padding: 20px;
+            background: white;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+        }
+        .timer { 
+            font-size: 1.4rem; 
+            color: #d32f2f; 
+            font-weight: bold;
+            margin-top: 10px; 
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Kiosco de Escaneo</h1>
+        <p>Apunta tu celular a este código para registrar tu Entrada/Salida.</p>
+        <div id="qrcode"></div>
+        <div class="timer">El código expira en: <span id="time">10</span>s</div>
+    </div>
+
+    <script>
+        const qrcodeContainer = document.getElementById("qrcode");
+        let qrcode = new QRCode(qrcodeContainer, {
+            width: 250,
+            height: 250,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
+
+        // Esta función genera el "Token" que el celular va a leer.
+        function generateToken() {
+            // El token será un objeto JSON con la hora exacta en la que se creó.
+            // En producción, esto vendría encriptado por el servidor.
+            const token = {
+                escuela_id: "ESC-123",
+                timestamp: Date.now()
+            };
+            qrcode.makeCode(JSON.stringify(token));
+        }
+
+        let timeLeft = 10;
+        function updateTimer() {
+            document.getElementById('time').innerText = timeLeft;
+            timeLeft--;
+            if (timeLeft < 0) {
+                timeLeft = 10;
+                generateToken(); // Generar un nuevo QR cada 10 segundos para máxima seguridad
+            }
+        }
+
+        // Iniciar inmediatamente
+        generateToken();
+        setInterval(updateTimer, 1000);
+    </script>
+</body>
+</html>

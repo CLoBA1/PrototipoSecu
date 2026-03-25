@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Maestro</title>
+    <!-- Librería para acceder a la cámara y escanear QR en web -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #121212; 
+            color: white; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+        }
+        .app-container { 
+            background: #1e1e1e; 
+            padding: 2rem; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            text-align: center; 
+            width: 90%; 
+            max-width: 400px; 
+        }
+        h1 { margin-top: 0; color: #64b5f6;}
+        #reader { 
+            width: 100%; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            margin-bottom: 20px; 
+            display: none;
+            background: black;
+        }
+        button { 
+            background: #1976d2; 
+            color: white; 
+            border: none; 
+            padding: 15px 24px; 
+            border-radius: 30px; 
+            font-size: 1.1rem; 
+            cursor: pointer; 
+            font-weight: bold; 
+            width: 100%; 
+            transition: background 0.3s; 
+            margin-bottom: 10px;
+        }
+        button:hover { background: #1565c0; }
+        .status { margin-top: 20px; font-size: 1.1rem; font-weight: bold; min-height: 25px;}
+        .success { color: #4CAF50; }
+        .error { color: #F44336; }
+        .log { margin-top: 10px; font-size: 0.9rem; color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <h1>Mi Asistencia</h1>
+        <p>Prototipo de Validación</p>
+        
+        <div id="reader"></div>
+        
+        <button id="btnScan" onclick="startScanner()">📷 1. Escanear QR Kiosco</button>
+        <button id="btnBiometric" onclick="authenticateBiometric()" style="display:none; background: #4CAF50;">👆 2. Confirmar Identidad (Huella)</button>
+        
+        <div id="status" class="status"></div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let html5QrcodeScanner;
+
+        // PASO 1: Iniciar la cámara y leer el QR
+        function startScanner() {
+            document.getElementById('reader').style.display = 'block';
+            document.getElementById('status').innerText = 'Buscando código QR...';
+            document.getElementById('status').className = 'status';
+            document.getElementById('btnScan').style.display = 'none';
+            
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            // Solicita cámara trasera si existe
+            html5QrcodeScanner.start(
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: {width: 250, height: 250} },
+                onScanSuccess,
+                onScanFailure
+            ).catch(err => {
+                document.getElementById('status').innerText = 'Error: Activa los permisos de la cámara.';
+                document.getElementById('status').className = 'status error';
+                document.getElementById('btnScan').style.display = 'block';
+            });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // Apagar la cámara cuando encontramos un QR
+            html5QrcodeScanner.stop().then(() => {
+                document.getElementById('reader').style.display = 'none';
+                
+                try {
+                    const data = JSON.parse(decodedText);
+                    const now = Date.now();
+                    const ageInSeconds = (now - data.timestamp) / 1000;
+
+                    // VALIDACIÓN DE SEGURIDAD FÍSICA:
+                    // Si el QR tiene más de 15 segundos de antigüedad, significa que es una FOTO, no están en la escuela.
+                    if (ageInSeconds <= 15) {
+                        document.getElementById('status').innerText = '✔️ QR Válido. Estás en la escuela.';
+                        document.getElementById('status').className = 'status success';
+                        // Mostrar el botón de huella
+                        document.getElementById('btnBiometric').style.display = 'block';
+                    } else {
+                        document.getElementById('status').innerText = '✖️ Código Expirado. Escanea el QR actual del Kiosco.';
+                        document.getElementById('status').className = 'status error';
+                        document.getElementById('btnScan').style.display = 'block';
+                        document.getElementById('btnScan').innerText = 'Volver a escanear';
+                    }
+                } catch (e) {
+                    document.getElementById('status').innerText = 'QR no reconocido por el sistema.';
+                    document.getElementById('status').className = 'status error';
+                    document.getElementById('btnScan').style.display = 'block';
+                }
+            });
+        }
+
+        function onScanFailure(error) {
+            // Se ejecuta internamente mientas busca, no hacemos nada.
+        }
+
+        // PASO 2: API Biométrica (WebAuthn / Lector Intregrado)
+        async function authenticateBiometric() {
+            document.getElementById('status').innerText = 'Llamando al sensor de huella/FaceID...';
+            document.getElementById('status').className = 'status';
+
+            try {
+                // Esta es la llamada real a la API WebAuthn del navegador.
+                // En Producción (tu proyecto final), estas opciones vienen de tu base de datos.
+                const publicKey = {
+                    challenge: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), 
+                    rp: { name: "Prototipo Escolar" },
+                    user: {
+                        id: new Uint8Array([12, 34]), 
+                        name: "maestro@tecnica6.edu.mx",
+                        displayName: "Prof. Alberto"
+                    },
+                    pubKeyCredParams: [{type: "public-key", alg: -7}],
+                    authenticatorSelection: {
+                        // "platform" obliga al navegador a usar el hardware biomédico del equipo local (huella del cel, windows hello, etc)
+                        authenticatorAttachment: "platform", 
+                        userVerification: "required"
+                    },
+                    timeout: 60000,
+                    attestation: "direct"
+                };
+
+                console.log("Invocando navigator.credentials.create...");
+                // Esto levantará la ventanita nativa del sistema operativo pidiendo la huella
+                const credential = await navigator.credentials.create({ publicKey });
+                
+                if(credential) {
+                    document.getElementById('status').innerText = '✅ ¡Asistencia de ENTRADA registrada con éxito!';
+                    document.getElementById('status').className = 'status success';
+                    document.getElementById('btnBiometric').style.display = 'none';
+                    
+                    document.getElementById('log').innerText += "\n[Server] Guardando registro en BD: 07:58 AM";
+                    
+                    // Reiniciar para probar de nuevo
+                    setTimeout(() => {
+                        document.getElementById('btnScan').style.display = 'block';
+                        document.getElementById('btnScan').innerText = 'Probar de nuevo';
+                        document.getElementById('status').innerText = '';
+                        document.getElementById('log').innerText = '';
+                    }, 5000);
+                }
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').innerText = '✖️ Cancelación biométrica o dispositivo sin lector.';
+                document.getElementById('status').className = 'status error';
+                document.getElementById('log').innerText = error.message;
+            }
+        }
+    </script>
+</body>
+</html>
